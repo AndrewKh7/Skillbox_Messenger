@@ -1,7 +1,6 @@
 import time
-
+import random
 from flask import Flask, request
-
 from datetime import datetime
 
 app = Flask(__name__)
@@ -18,6 +17,15 @@ messeges = [
     },
 ]
 
+passwords = {
+            'Marry': '12345',
+            'Sam': '666',
+            'Dean': '777',
+        }
+
+
+# Tokens: 'token': {'username': str,'last_active_time': float }
+tokens = {}
 
 @app.route('/')
 def main():
@@ -35,18 +43,29 @@ def status():
 @app.route('/send', methods=['POST'])
 def send():
     """
-    request: {" username": "str", "text": "str", "time": time.}
+    request: {"text": "str", "token": "str"}
     response: {'ok':true}
     """
     data = request.json
-    username = data['username']
     text = data['text']
-    messeges.append({
-        'username': username,
-        'text': text,
-        'time': time.time(),
-    })
-    return {'ok': True}
+    token = data['token']
+    status = {'ok': True}
+    time_moment = time.time()
+
+    if token not in tokens:
+        status['ok'] = False
+    elif time_moment - tokens[token]['last_active_time'] > 20:
+        status['ok'] = False
+    else:
+        username = tokens[token]['username']
+        tokens[token]['last_active_time'] = time_moment
+        messeges.append({
+            'username': username,
+            'text': text,
+            'time': time_moment,
+        })
+
+    return status
 
 
 @app.route('/history', methods=['GET'])
@@ -55,8 +74,25 @@ def history():
     request: -  last time on client history
     response: {'messeges':{"username": "str", "text": "str", "time": time } ... }
     """
-    last_msg_time = float(request.args.get('time'))
+    last_msg_time = float(request.args['time'])
     return {'messeges': list(filter(lambda m: m['time'] > last_msg_time, messeges))}
 
+@app.route('/auth')
+def auth():
+    user = request.args['username']
+    pas = request.args['password']
+
+    if user in passwords and passwords[user] == pas:
+        token = str(random.randint(1000000, 9999999))
+        tokens[token] = {'username': user, 'last_active_time': time.time()}
+        return {
+                'ok': True,
+                'token': token,
+        }
+    else:
+        return {
+                'ok': False,
+                'token': '',
+        }
 
 app.run()
